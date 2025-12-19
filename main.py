@@ -3,53 +3,49 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Union
 
-Money = Decimal
-Number = Union[int, float, str, Decimal]
-
+Numero = Union[int, float, Decimal]
 
 INSS_ALIQUOTA = Decimal("0.08")
 INSS_TETO = Decimal("500.00")
 
-IRRF_ISENCAO_ATE = Decimal("2000.00")
+IRRF_LIMITE_ISENCAO = Decimal("2000.00")
 IRRF_ALIQUOTA = Decimal("0.10")
 
-MOEDA_2_CASAS = Decimal("0.01")
+CASAS_2 = Decimal("0.01")
 
 
-def calcular_salario_liquido(salario_bruto: Number) -> float:
-    bruto = _validar_e_converter_salario(salario_bruto)
+def calcular_salario_liquido(salario_bruto: Numero) -> float:
+    bruto = _validar_salario(_as_decimal(salario_bruto))
 
-    inss = _calcular_inss(bruto)
-    irrf = _calcular_irrf(bruto)
-
-    liquido = bruto - inss - irrf
-    liquido = _arredondar_moeda(liquido)
+    liquido = bruto - _desconto_inss(bruto) - _desconto_irrf(bruto)
+    liquido = _arredondar_2_casas(liquido)
 
     return float(liquido)
 
 
-def _validar_e_converter_salario(salario_bruto: Number) -> Money:
-    bruto = _to_decimal(salario_bruto)
+def _validar_salario(bruto: Decimal) -> Decimal:
     if bruto <= 0:
         raise ValueError("Salário bruto deve ser maior que zero.")
     return bruto
 
 
-def _calcular_inss(bruto: Money) -> Money:
+def _desconto_inss(bruto: Decimal) -> Decimal:
     desconto = bruto * INSS_ALIQUOTA
-    return min(desconto, INSS_TETO)
+    return INSS_TETO if desconto > INSS_TETO else desconto
 
 
-def _calcular_irrf(bruto: Money) -> Money:
-    if bruto <= IRRF_ISENCAO_ATE:
-        return Decimal("0")
-    return bruto * IRRF_ALIQUOTA
+def _desconto_irrf(bruto: Decimal) -> Decimal:
+    return (bruto * IRRF_ALIQUOTA) if bruto > IRRF_LIMITE_ISENCAO else Decimal("0")
 
 
-def _arredondar_moeda(valor: Money) -> Money:
-    return valor.quantize(MOEDA_2_CASAS, rounding=ROUND_HALF_UP)
+def _arredondar_2_casas(valor: Decimal) -> Decimal:
+    return valor.quantize(CASAS_2, rounding=ROUND_HALF_UP)
 
 
-def _to_decimal(valor: Number) -> Money:
-    # str() evita problemas clássicos de binário->decimal com float
+def _as_decimal(valor: Numero) -> Decimal:
+    # Mais estrito: só aceita int/float/Decimal (não aceita str, None, etc.)
+    # bool é subclass de int, então bloqueamos explicitamente.
+    if isinstance(valor, bool) or not isinstance(valor, (int, float, Decimal)):
+        raise TypeError("Salário bruto deve ser numérico (int, float ou Decimal).")
+    # str(float) evita ruído binário comum em cálculos monetários
     return valor if isinstance(valor, Decimal) else Decimal(str(valor))
